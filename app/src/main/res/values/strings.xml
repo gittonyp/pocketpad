@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PocketPad</string>
+    <string name="skin_xbox">Xbox</string>
+    <string name="skin_playstation">PS</string>
+    <string name="pair">Pair</string>
+    <string name="notification_channel">Controller</string>
+    <string name="notification_title">PocketPad</string>
+    <string name="notification_text">Controller active</string>
+    <string name="status_starting">Starting controller…</string>
+    <string name="status_permissions">Bluetooth permissions are required</string>
+    <string name="status_pair_hint">Tap Pair, then add “PocketPad” on your PC</string>
+</resources>

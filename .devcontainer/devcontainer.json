@@ -1,0 +1,23 @@
+{
+  "name": "PocketPad",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "ANDROID_HOME": "/opt/android-sdk",
+    "ANDROID_SDK_ROOT": "/opt/android-sdk"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "fwcd.kotlin"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic"
+      }
+    }
+  },
+  "postCreateCommand": "gradle --version"
+}

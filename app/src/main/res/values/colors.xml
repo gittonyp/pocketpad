@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#107C10</color>
+    <color name="pad_background">#05070A</color>
+    <color name="pad_bar">#CC0B1016</color>
+</resources>
