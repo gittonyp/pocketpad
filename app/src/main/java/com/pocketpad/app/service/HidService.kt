@@ -5,8 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -24,11 +27,25 @@ import java.util.concurrent.Executor
 class HidService : Service() {
 
     private var gamepad: HidGamepad? = null
+    private var receiverRegistered = false
+
+    /** Re-register the HID profile when Bluetooth is switched back on. */
+    private val bluetoothStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                BluetoothAdapter.STATE_ON -> gamepad?.start()
+                BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF ->
+                    ControllerHub.updateStatus("Bluetooth is off — turn it on")
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         if (!startInForeground()) {
+            ControllerHub.updateStatus("Could not start the controller service — check permissions")
             stopSelf()
             return
         }
@@ -41,10 +58,25 @@ class HidService : Service() {
         })
         gamepad = controller
         ControllerHub.gamepad = controller
+
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(bluetoothStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(bluetoothStateReceiver, filter)
+        }
+        receiverRegistered = true
+
         controller.start()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // start() is a no-op when already running, but recovers after Bluetooth was off
+        // or the HID proxy dropped. Not sticky: without the UI the pad is useless, and a
+        // background restart would hit foreground-service start restrictions.
+        gamepad?.start()
+        return START_NOT_STICKY
+    }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         stopSelf()
@@ -52,6 +84,10 @@ class HidService : Service() {
     }
 
     override fun onDestroy() {
+        if (receiverRegistered) {
+            unregisterReceiver(bluetoothStateReceiver)
+            receiverRegistered = false
+        }
         gamepad?.stop()
         gamepad = null
         ControllerHub.gamepad = null
@@ -83,6 +119,7 @@ class HidService : Service() {
                 .setContentTitle(getString(R.string.notification_title))
                 .setContentText(getString(R.string.notification_text))
                 .setContentIntent(pending)
+                .setCategory(Notification.CATEGORY_SERVICE)
                 .setOngoing(true)
                 .build()
 

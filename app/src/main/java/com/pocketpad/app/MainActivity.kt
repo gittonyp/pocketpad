@@ -10,6 +10,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
+import android.net.Uri
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -57,6 +59,14 @@ class MainActivity : Activity() {
         customizeButton = findViewById(R.id.customizeButton)
         val pairButton = findViewById<Button>(R.id.pairButton)
 
+        skin = if (getPreferences(MODE_PRIVATE).getBoolean(SKIN_PS_PREF, false)) {
+            Skin.PLAYSTATION
+        } else {
+            Skin.XBOX
+        }
+        skinButton.setText(
+            if (skin == Skin.XBOX) R.string.skin_xbox else R.string.skin_playstation
+        )
         gamepadView.skin = skin
         gamepadView.restoreLayout(getPreferences(MODE_PRIVATE).getString(LAYOUT_PREF, null))
         gamepadView.onStateChanged = { state -> queueSend(state) }
@@ -70,6 +80,9 @@ class MainActivity : Activity() {
             skinButton.setText(
                 if (skin == Skin.XBOX) R.string.skin_xbox else R.string.skin_playstation
             )
+            getPreferences(MODE_PRIVATE).edit()
+                .putBoolean(SKIN_PS_PREF, skin == Skin.PLAYSTATION)
+                .apply()
         }
 
         customizeButton.setOnClickListener {
@@ -103,6 +116,8 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        // Never leave a button or stick held on the PC while we are not on screen.
+        gamepadView.releaseAll()
         ControllerHub.setStatusListener(null)
         super.onPause()
     }
@@ -132,6 +147,23 @@ class MainActivity : Activity() {
         } else {
             statusText.setText(R.string.status_permissions)
             Toast.makeText(this, R.string.status_permissions, Toast.LENGTH_LONG).show()
+            // After "Don't allow" twice Android stops showing the dialog; send them to Settings.
+            val blocked = bluetoothPermissions.any {
+                checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED &&
+                    !shouldShowRequestPermissionRationale(it)
+            }
+            if (blocked) openAppSettings()
+        }
+    }
+
+    private fun openAppSettings() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.fromParts("package", packageName, null))
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not open app settings", e)
         }
     }
 
@@ -160,12 +192,20 @@ class MainActivity : Activity() {
             putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_SECONDS)
         }
         try {
-            startActivity(intent)
+            startActivityForResult(intent, REQUEST_DISCOVERABLE)
             statusText.setText(R.string.status_pair_hint)
         } catch (e: Exception) {
             Log.e(TAG, "Could not request discoverability", e)
             Toast.makeText(this, "Could not make the phone discoverable", Toast.LENGTH_LONG)
                 .show()
+        }
+    }
+
+    @Deprecated("Plain Activity result API; this activity does not use AndroidX")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_DISCOVERABLE && resultCode == RESULT_CANCELED) {
+            statusText.setText(R.string.status_discoverable_declined)
         }
     }
 
@@ -218,6 +258,8 @@ class MainActivity : Activity() {
         const val TAG = "MainActivity"
         const val REQUEST_PERMISSIONS = 100
         const val REQUEST_NOTIFICATIONS = 101
+        const val REQUEST_DISCOVERABLE = 102
+        const val SKIN_PS_PREF = "skin_playstation"
         const val DISCOVERABLE_SECONDS = 300
         const val MIN_SEND_INTERVAL_MS = 8L
         const val LAYOUT_PREF = "custom_gamepad_layout"

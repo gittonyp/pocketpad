@@ -39,6 +39,7 @@ class GamepadView @JvmOverloads constructor(
         set(value) {
             field = value
             updateSkinLayout()
+            rebuildBackgroundShader()
             invalidate()
         }
 
@@ -52,8 +53,16 @@ class GamepadView @JvmOverloads constructor(
             state.reset()
             selectedControl = null
             editorPointerId = MotionEvent.INVALID_POINTER_ID
-            invalidate()
+            // Tell the host too, otherwise a button held while toggling stays pressed on the PC.
+            notifyChanged()
         }
+
+    /** Releases every held control and sends the neutral state (e.g. when the app is paused). */
+    fun releaseAll() {
+        pointers.clear()
+        state.reset()
+        notifyChanged()
+    }
 
     private val state = GamepadState()
     private val pointers = SparseArray<Target>()
@@ -104,6 +113,17 @@ class GamepadView @JvmOverloads constructor(
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var bodyShader: LinearGradient? = null
+
+    private fun rebuildBackgroundShader() {
+        if (heightPx <= 0f) return
+        bodyShader = LinearGradient(
+            0f, 0f, 0f, heightPx,
+            intArrayOf(skin.bodyTop, skin.bodyBottom),
+            null,
+            Shader.TileMode.CLAMP
+        )
+    }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -119,6 +139,7 @@ class GamepadView @JvmOverloads constructor(
         smallRadius = unit * 0.032f
 
         updateSkinLayout()
+        rebuildBackgroundShader()
 
         baseGuide.set(widthPx * 0.50f, heightPx * 0.11f)
         baseBack.set(widthPx * 0.41f, heightPx * 0.13f)
@@ -152,12 +173,7 @@ class GamepadView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (unit <= 0f) return
 
-        backgroundPaint.shader = LinearGradient(
-            0f, 0f, 0f, heightPx,
-            intArrayOf(skin.bodyTop, skin.bodyBottom),
-            null,
-            Shader.TileMode.CLAMP
-        )
+        backgroundPaint.shader = bodyShader
         canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
         backgroundPaint.shader = null
 
@@ -648,9 +664,13 @@ class GamepadView @JvmOverloads constructor(
             if (parts.size != 4) return@forEach
             val id = ControlId.values().firstOrNull { it.name == parts[0] } ?: return@forEach
             val transform = transforms.getValue(id)
-            transform.offsetX = parts[1].toFloatOrNull() ?: return@forEach
-            transform.offsetY = parts[2].toFloatOrNull() ?: return@forEach
-            transform.scale = (parts[3].toFloatOrNull() ?: 1f).coerceIn(MIN_SCALE, MAX_SCALE)
+            // toFloatOrNull() happily accepts "NaN"/"Infinity"; a corrupt pref must not hide controls.
+            val offsetX = parts[1].toFloatOrNull()?.takeIf { it.isFinite() } ?: return@forEach
+            val offsetY = parts[2].toFloatOrNull()?.takeIf { it.isFinite() } ?: return@forEach
+            val scale = parts[3].toFloatOrNull()?.takeIf { it.isFinite() } ?: 1f
+            transform.offsetX = offsetX
+            transform.offsetY = offsetY
+            transform.scale = scale.coerceIn(MIN_SCALE, MAX_SCALE)
         }
         updateSkinLayout()
     }

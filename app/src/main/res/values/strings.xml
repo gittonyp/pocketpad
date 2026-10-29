@@ -12,5 +12,6 @@
     <string name="notification_text">Controller active</string>
     <string name="status_starting">Starting controller…</string>
     <string name="status_permissions">Bluetooth permissions are required</string>
+    <string name="status_discoverable_declined">Discoverable request declined — tap Pair and allow it</string>
     <string name="status_pair_hint">Tap Pair, then pair with this phone in your PC’s Bluetooth settings</string>
 </resources>

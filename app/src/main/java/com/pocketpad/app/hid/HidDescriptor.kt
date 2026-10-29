@@ -34,6 +34,8 @@ object HidDescriptor {
         0x95, 0x01,             //   Report Count (1)
         0x81, 0x42,             //   Input (Data, Var, Abs, Null State)
         0x65, 0x00,             //   Unit (None)
+        0x35, 0x00,             //   Physical Minimum (0)  - reset so the hat's 0..315 does not
+        0x45, 0x00,             //   Physical Maximum (0)    leak onto the axes that follow
         0x75, 0x04,             //   Report Size (4)
         0x95, 0x01,             //   Report Count (1)
         0x81, 0x03,             //   Input (Const, Var, Abs) padding
