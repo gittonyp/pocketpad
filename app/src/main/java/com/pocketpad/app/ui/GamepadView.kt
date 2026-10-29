@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Shader
@@ -37,6 +38,7 @@ class GamepadView @JvmOverloads constructor(
     var skin: Skin = Skin.XBOX
         set(value) {
             field = value
+            updateSkinLayout()
             invalidate()
         }
 
@@ -92,10 +94,7 @@ class GamepadView @JvmOverloads constructor(
         guideRadius = unit * 0.045f
         smallRadius = unit * 0.032f
 
-        leftStick.set(widthPx * 0.16f, heightPx * 0.55f)
-        dpad.set(widthPx * 0.16f, heightPx * 0.86f)
-        face.set(widthPx * 0.84f, heightPx * 0.55f)
-        rightStick.set(widthPx * 0.84f, heightPx * 0.86f)
+        updateSkinLayout()
 
         guide.set(widthPx * 0.50f, heightPx * 0.11f)
         back.set(widthPx * 0.41f, heightPx * 0.13f)
@@ -131,12 +130,25 @@ class GamepadView @JvmOverloads constructor(
 
         backgroundPaint.shader = LinearGradient(
             0f, 0f, 0f, heightPx,
-            intArrayOf(0xFF121A24.toInt(), 0xFF05070A.toInt()),
+            intArrayOf(skin.bodyTop, skin.bodyBottom),
             null,
             Shader.TileMode.CLAMP
         )
         canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
         backgroundPaint.shader = null
+
+        fillPaint.color = skin.surface
+        fillPaint.alpha = 125
+        canvas.drawRoundRect(
+            unit * 0.025f,
+            unit * 0.025f,
+            widthPx - unit * 0.025f,
+            heightPx - unit * 0.025f,
+            unit * 0.045f,
+            unit * 0.045f,
+            fillPaint
+        )
+        fillPaint.alpha = 255
 
         drawDpad(canvas)
         drawStick(canvas, leftStick, state.leftX, state.leftY, "L", isHeld(Kind.LEFT_STICK))
@@ -412,22 +424,55 @@ class GamepadView @JvmOverloads constructor(
             val cy = faceY(i)
             val pressed = state.buttons[i]
 
-            fillPaint.color = skin.faceColors[i]
-            fillPaint.alpha = if (pressed) 255 else 215
-            canvas.drawCircle(cx, cy, faceRadius, fillPaint)
+            if (skin == Skin.XBOX) {
+                fillPaint.color = skin.faceColors[i]
+                fillPaint.alpha = if (pressed) 255 else 215
+                canvas.drawCircle(cx, cy, faceRadius, fillPaint)
 
-            strokePaint.color = if (pressed) Color.WHITE else 0x88FFFFFF.toInt()
-            strokePaint.strokeWidth = unit * (if (pressed) 0.009f else 0.004f)
-            canvas.drawCircle(cx, cy, faceRadius, strokePaint)
+                strokePaint.color = if (pressed) Color.WHITE else 0x88FFFFFF.toInt()
+                strokePaint.strokeWidth = unit * (if (pressed) 0.009f else 0.004f)
+                canvas.drawCircle(cx, cy, faceRadius, strokePaint)
 
-            textPaint.color = Color.WHITE
-            textPaint.textSize = faceRadius * 1.15f
-            canvas.drawText(
-                skin.faceLabels[i],
-                cx,
-                cy + textPaint.textSize * 0.35f,
-                textPaint
-            )
+                textPaint.color = Color.WHITE
+                textPaint.textSize = faceRadius * 1.15f
+                canvas.drawText(
+                    skin.faceLabels[i],
+                    cx,
+                    cy + textPaint.textSize * 0.35f,
+                    textPaint
+                )
+            } else {
+                drawPlayStationButton(canvas, cx, cy, i, pressed)
+            }
+        }
+    }
+
+    private fun drawPlayStationButton(canvas: Canvas, cx: Float, cy: Float, index: Int, pressed: Boolean) {
+        fillPaint.color = skin.faceColors[index]
+        fillPaint.alpha = if (pressed) 70 else 28
+        canvas.drawCircle(cx, cy, faceRadius * 1.12f, fillPaint)
+        fillPaint.alpha = 255
+
+        strokePaint.color = skin.faceColors[index]
+        strokePaint.strokeWidth = unit * (if (pressed) 0.010f else 0.007f)
+        strokePaint.style = Paint.Style.STROKE
+        val shape = skin.faceShapes[index]
+        when (shape) {
+            FaceShape.CROSS -> {
+                canvas.drawLine(cx - faceRadius * 0.45f, cy - faceRadius * 0.45f, cx + faceRadius * 0.45f, cy + faceRadius * 0.45f, strokePaint)
+                canvas.drawLine(cx + faceRadius * 0.45f, cy - faceRadius * 0.45f, cx - faceRadius * 0.45f, cy + faceRadius * 0.45f, strokePaint)
+            }
+            FaceShape.CIRCLE -> canvas.drawCircle(cx, cy, faceRadius * 0.45f, strokePaint)
+            FaceShape.SQUARE -> canvas.drawRect(cx - faceRadius * 0.42f, cy - faceRadius * 0.42f, cx + faceRadius * 0.42f, cy + faceRadius * 0.42f, strokePaint)
+            FaceShape.TRIANGLE -> {
+                val path = Path().apply {
+                    moveTo(cx, cy - faceRadius * 0.52f)
+                    lineTo(cx + faceRadius * 0.52f, cy + faceRadius * 0.42f)
+                    lineTo(cx - faceRadius * 0.52f, cy + faceRadius * 0.42f)
+                    close()
+                }
+                canvas.drawPath(path, strokePaint)
+            }
         }
     }
 
@@ -522,6 +567,16 @@ class GamepadView @JvmOverloads constructor(
         0 -> faceOffset
         3 -> -faceOffset
         else -> 0f
+    }
+
+    private fun updateSkinLayout() {
+        if (widthPx <= 0f || heightPx <= 0f) return
+        val upper = heightPx * if (skin == Skin.PLAYSTATION) 0.43f else 0.55f
+        val lower = heightPx * if (skin == Skin.PLAYSTATION) 0.72f else 0.86f
+        leftStick.set(widthPx * 0.16f, lower)
+        dpad.set(widthPx * 0.16f, upper)
+        face.set(widthPx * 0.84f, upper)
+        rightStick.set(widthPx * 0.84f, lower)
     }
 
     private fun shoulderButton(index: Int): Int =
