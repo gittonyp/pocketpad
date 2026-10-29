@@ -109,7 +109,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         hideSystemUi()
-        ControllerHub.setStatusListener { message -> statusText.text = message }
+        ControllerHub.setStatusListener { message -> showStatus(message) }
         if (hasBluetoothPermissions()) {
             ensureService()
         }
@@ -241,6 +241,13 @@ class MainActivity : Activity() {
                 ControllerHub.gamepad?.send(pending)
             }, wait)
         }
+    }
+
+    private fun showStatus(message: String) {
+        statusText.text = message
+        statusText.setTextColor(
+            if (message.startsWith("Connected")) 0xFF7CE38B.toInt() else 0xFFE8F0F8.toInt()
+        )
     }
 
     private fun hideSystemUi() {

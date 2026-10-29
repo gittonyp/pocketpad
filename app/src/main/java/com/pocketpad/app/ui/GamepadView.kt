@@ -3,6 +3,7 @@ package com.pocketpad.app.ui
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.CornerPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
@@ -89,7 +90,8 @@ class GamepadView @JvmOverloads constructor(
     private var editorLastX = 0f
     private var editorLastY = 0f
     private var stickRadius = 0f
-    private var dpadHalf = 0f
+    private var dpadHalf = 0f      // reach of each d-pad arm from the centre
+    private var dpadThick = 0f     // half-thickness of an arm
     private var faceOffset = 0f
     private var faceRadius = 0f
 
@@ -113,6 +115,10 @@ class GamepadView @JvmOverloads constructor(
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val dpadPath = Path()
+    private val arrowPath = Path()
+    private val tmpRect = RectF()
+    private var cornerEffect: CornerPathEffect? = null
     private var bodyShader: LinearGradient? = null
 
     private fun rebuildBackgroundShader() {
@@ -131,29 +137,31 @@ class GamepadView @JvmOverloads constructor(
         heightPx = h.toFloat()
         unit = min(widthPx, heightPx)
 
-        stickRadius = unit * 0.12f
-        dpadHalf = unit * 0.09f
-        faceOffset = unit * 0.095f
-        faceRadius = unit * 0.058f
-        guideRadius = unit * 0.045f
-        smallRadius = unit * 0.032f
+        stickRadius = unit * 0.14f
+        dpadHalf = unit * 0.115f
+        dpadThick = unit * 0.042f
+        faceOffset = unit * 0.105f
+        faceRadius = unit * 0.065f
+        guideRadius = unit * 0.055f
+        smallRadius = unit * 0.042f
+        cornerEffect = CornerPathEffect(unit * 0.012f)
 
         updateSkinLayout()
         rebuildBackgroundShader()
 
         baseGuide.set(widthPx * 0.50f, heightPx * 0.11f)
-        baseBack.set(widthPx * 0.41f, heightPx * 0.13f)
-        baseStart.set(widthPx * 0.59f, heightPx * 0.13f)
+        baseBack.set(widthPx * 0.37f, heightPx * 0.13f)
+        baseStart.set(widthPx * 0.63f, heightPx * 0.13f)
 
         val margin = widthPx * 0.03f
-        val triggerW = unit * 0.16f
-        val triggerH = unit * 0.11f
+        val triggerW = unit * 0.17f
+        val triggerH = unit * 0.12f
         val top = heightPx * 0.04f
         ltRect.set(margin, top, margin + triggerW, top + triggerH)
         rtRect.set(widthPx - margin - triggerW, top, widthPx - margin, top + triggerH)
 
-        val shoulderW = unit * 0.11f
-        val shoulderH = unit * 0.075f
+        val shoulderW = unit * 0.13f
+        val shoulderH = unit * 0.09f
         val gap = unit * 0.02f
         lbRect.set(
             margin + triggerW + gap,
@@ -368,13 +376,14 @@ class GamepadView @JvmOverloads constructor(
     private fun hitTest(x: Float, y: Float): Hit? {
         val faceScale = scale(ControlId.FACE)
         for (i in 0 until 4) {
-            if (hypot(x - faceX(i), y - faceY(i)) <= faceRadius * faceScale * 1.25f) {
+            if (hypot(x - faceX(i), y - faceY(i)) <= faceRadius * faceScale * 1.15f) {
                 return Hit(Kind.FACE, i)
             }
         }
         val centerScale = scale(ControlId.CENTER)
-        if (hypot(x - back.x, y - back.y) <= smallRadius * centerScale * 1.3f) return Hit(Kind.CENTER, 0)
-        if (hypot(x - start.x, y - start.y) <= smallRadius * centerScale * 1.3f) return Hit(Kind.CENTER, 1)
+        val slack = unit * 0.012f
+        if (smallButtonRect(back).apply { inset(-slack, -slack) }.contains(x, y)) return Hit(Kind.CENTER, 0)
+        if (smallButtonRect(start).apply { inset(-slack, -slack) }.contains(x, y)) return Hit(Kind.CENTER, 1)
         if (hypot(x - guide.x, y - guide.y) <= guideRadius * centerScale * 1.3f) return Hit(Kind.CENTER, 2)
 
         if (ltRect.contains(x, y)) return Hit(Kind.TRIGGER, 0)
@@ -388,13 +397,8 @@ class GamepadView @JvmOverloads constructor(
         if (hypot(x - rightStick.x, y - rightStick.y) <= stickRadius * scale(ControlId.RIGHT_STICK)) {
             return Hit(Kind.RIGHT_STICK, 0)
         }
-        val dpadX = abs(x - dpad.x)
-        val dpadY = abs(y - dpad.y)
-        val dpadScale = scale(ControlId.DPAD)
-        val arm = unit * 0.055f * dpadScale
-        if ((dpadX <= dpadHalf * dpadScale && dpadY <= arm) ||
-            (dpadY <= dpadHalf * dpadScale && dpadX <= arm)
-        ) {
+        // Direction comes from the angle, so a generous round hit area is friendlier than the plus shape.
+        if (hypot(x - dpad.x, y - dpad.y) <= dpadHalf * scale(ControlId.DPAD) * 1.15f) {
             return Hit(Kind.DPAD, 0)
         }
         return null
@@ -427,44 +431,87 @@ class GamepadView @JvmOverloads constructor(
         canvas.drawCircle(kx, ky, radius * 0.42f, fillPaint)
         strokePaint.color = 0xCCFFFFFF.toInt()
         canvas.drawCircle(kx, ky, radius * 0.42f, strokePaint)
-
-        textPaint.color = 0x99FFFFFF.toInt()
-        textPaint.textSize = unit * 0.03f
-        canvas.drawText(
-            label,
-            center.x,
-            center.y - radius - unit * 0.015f,
-            textPaint
-        )
     }
 
     private fun drawDpad(canvas: Canvas) {
         val cx = dpad.x
         val cy = dpad.y
-        val scale = scale(ControlId.DPAD)
-        val half = dpadHalf * scale
-        val arm = unit * 0.055f * scale
-        val radius = arm * 0.7f
+        val s = scale(ControlId.DPAD)
+        val r = dpadHalf * s
+        val t = dpadThick * s
 
-        fillPaint.color = 0x331C2836
-        canvas.drawRoundRect(cx - half, cy - arm, cx + half, cy + arm, radius, radius, fillPaint)
-        canvas.drawRoundRect(cx - arm, cy - half, cx + arm, cy + half, radius, radius, fillPaint)
+        // One plus-shaped outline with softened corners.
+        dpadPath.rewind()
+        dpadPath.moveTo(cx - t, cy - r)
+        dpadPath.lineTo(cx + t, cy - r)
+        dpadPath.lineTo(cx + t, cy - t)
+        dpadPath.lineTo(cx + r, cy - t)
+        dpadPath.lineTo(cx + r, cy + t)
+        dpadPath.lineTo(cx + t, cy + t)
+        dpadPath.lineTo(cx + t, cy + r)
+        dpadPath.lineTo(cx - t, cy + r)
+        dpadPath.lineTo(cx - t, cy + t)
+        dpadPath.lineTo(cx - r, cy + t)
+        dpadPath.lineTo(cx - r, cy - t)
+        dpadPath.lineTo(cx - t, cy - t)
+        dpadPath.close()
 
-        strokePaint.color = 0x66FFFFFF
+        fillPaint.pathEffect = cornerEffect
+        strokePaint.pathEffect = cornerEffect
+        fillPaint.color = 0x55121C26
+        canvas.drawPath(dpadPath, fillPaint)
+        strokePaint.color = 0x88FFFFFF.toInt()
         strokePaint.strokeWidth = unit * 0.005f
-        canvas.drawRoundRect(cx - half, cy - arm, cx + half, cy + arm, radius, radius, strokePaint)
-        canvas.drawRoundRect(cx - arm, cy - half, cx + arm, cy + half, radius, radius, strokePaint)
+        canvas.drawPath(dpadPath, strokePaint)
+        fillPaint.pathEffect = null
+        strokePaint.pathEffect = null
 
-        if (state.hat != GamepadState.HAT_NEUTRAL) {
-            val (dx, dy) = hatVector(state.hat)
-            fillPaint.color = skin.accent
-            canvas.drawCircle(
-                cx + dx * half * 0.55f,
-                cy + dy * half * 0.55f,
-                arm * 0.75f,
-                fillPaint
-            )
+        // Four arrows (up, right, down, left). A pressed direction lights up; diagonals light two.
+        val hat = state.hat
+        val arrow = t * 0.62f
+        val dist = r * 0.68f
+        for (dir in 0 until 4) {
+            val hatIndex = dir * 2
+            val lit = hat != GamepadState.HAT_NEUTRAL &&
+                (hat == hatIndex || (hat + 1) % 8 == hatIndex || (hat + 7) % 8 == hatIndex)
+            arrowPath.rewind()
+            arrowPath.moveTo(0f, -dist - arrow)
+            arrowPath.lineTo(-arrow, -dist + arrow * 0.7f)
+            arrowPath.lineTo(arrow, -dist + arrow * 0.7f)
+            arrowPath.close()
+            canvas.save()
+            canvas.translate(cx, cy)
+            canvas.rotate(dir * 90f)
+            fillPaint.color = if (lit) skin.accent else 0x88FFFFFF.toInt()
+            canvas.drawPath(arrowPath, fillPaint)
+            canvas.restore()
         }
+    }
+
+    /** Rounded pill used for the small Share/Options (View/Menu) buttons. */
+    private fun smallButtonRect(center: PointF): RectF {
+        val s = scale(ControlId.CENTER)
+        val halfW = smallRadius * s * 1.9f
+        val halfH = smallRadius * s * 1.05f
+        tmpRect.set(center.x - halfW, center.y - halfH, center.x + halfW, center.y + halfH)
+        return tmpRect
+    }
+
+    private fun drawPill(canvas: Canvas, rect: RectF, label: String, pressed: Boolean) {
+        val corner = rect.height() / 2f
+        fillPaint.color = if (pressed) skin.accent else 0x441C2836
+        canvas.drawRoundRect(rect, corner, corner, fillPaint)
+
+        strokePaint.color = 0x88FFFFFF.toInt()
+        strokePaint.strokeWidth = unit * 0.005f
+        canvas.drawRoundRect(rect, corner, corner, strokePaint)
+
+        textPaint.color = Color.WHITE
+        textPaint.textSize = rect.height() * 0.5f
+        val maxWidth = rect.width() * 0.84f
+        val measured = textPaint.measureText(label)
+        if (measured > maxWidth) textPaint.textSize *= maxWidth / measured
+        canvas.drawText(label, rect.centerX(), rect.centerY() + textPaint.textSize * 0.35f, textPaint)
     }
 
     private fun drawFaceButtons(canvas: Canvas) {
@@ -500,7 +547,7 @@ class GamepadView @JvmOverloads constructor(
     private fun drawPlayStationButton(canvas: Canvas, cx: Float, cy: Float, index: Int, pressed: Boolean, scale: Float) {
         val radius = faceRadius * scale
         fillPaint.color = skin.faceColors[index]
-        fillPaint.alpha = if (pressed) 70 else 28
+        fillPaint.alpha = if (pressed) 120 else 28
         canvas.drawCircle(cx, cy, radius * 1.12f, fillPaint)
         fillPaint.alpha = 255
 
@@ -575,8 +622,8 @@ class GamepadView @JvmOverloads constructor(
 
     private fun drawCenterButtons(canvas: Canvas) {
         val scale = scale(ControlId.CENTER)
-        drawCenterButton(canvas, back, smallRadius * scale, skin.centerLabels[0], state.buttons[Buttons.BACK])
-        drawCenterButton(canvas, start, smallRadius * scale, skin.centerLabels[1], state.buttons[Buttons.START])
+        drawPill(canvas, smallButtonRect(back), skin.centerLabels[0], state.buttons[Buttons.BACK])
+        drawPill(canvas, smallButtonRect(start), skin.centerLabels[1], state.buttons[Buttons.START])
         drawCenterButton(canvas, guide, guideRadius * scale, skin.centerLabels[2], state.buttons[Buttons.GUIDE])
     }
 
@@ -623,12 +670,19 @@ class GamepadView @JvmOverloads constructor(
 
     private fun updateSkinLayout() {
         if (widthPx <= 0f || heightPx <= 0f) return
-        val upper = heightPx * if (skin == Skin.PLAYSTATION) 0.43f else 0.55f
-        val lower = heightPx * if (skin == Skin.PLAYSTATION) 0.72f else 0.86f
-        baseLeftStick.set(widthPx * 0.16f, lower)
-        baseDpad.set(widthPx * 0.16f, upper)
-        baseFace.set(widthPx * 0.84f, upper)
-        baseRightStick.set(widthPx * 0.84f, lower)
+        // Sticks sit lower and further in, so thumbs rest on them and nothing overlaps the
+        // face buttons. PlayStation: d-pad top-left, left stick bottom. Xbox: swapped.
+        val topRow = heightPx * 0.38f
+        val bottomRow = heightPx * 0.73f
+        if (skin == Skin.PLAYSTATION) {
+            baseDpad.set(widthPx * 0.14f, topRow)
+            baseLeftStick.set(widthPx * 0.33f, bottomRow)
+        } else {
+            baseLeftStick.set(widthPx * 0.14f, topRow)
+            baseDpad.set(widthPx * 0.33f, bottomRow)
+        }
+        baseFace.set(widthPx * 0.86f, topRow)
+        baseRightStick.set(widthPx * 0.67f, bottomRow)
         applyPosition(ControlId.LEFT_STICK, baseLeftStick, leftStick)
         applyPosition(ControlId.RIGHT_STICK, baseRightStick, rightStick)
         applyPosition(ControlId.DPAD, baseDpad, dpad)
@@ -761,8 +815,13 @@ class GamepadView @JvmOverloads constructor(
                 bounds.set(face.x - extent, face.y - extent, face.x + extent, face.y + extent)
             }
             ControlId.CENTER -> {
-                val extent = unit * 0.11f * scale(id)
-                bounds.set(guide.x - extent, guide.y - extent, guide.x + extent, guide.y + extent)
+                val s = scale(id)
+                bounds.set(
+                    back.x - unit * 0.09f * s,
+                    guide.y - unit * 0.07f * s,
+                    start.x + unit * 0.09f * s,
+                    maxOf(back.y, start.y) + unit * 0.07f * s
+                )
             }
         }
         bounds.inset(-unit * 0.025f, -unit * 0.025f)
