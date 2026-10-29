@@ -652,13 +652,11 @@ class GamepadView @JvmOverloads constructor(
             transform.offsetY = parts[2].toFloatOrNull() ?: return@forEach
             transform.scale = (parts[3].toFloatOrNull() ?: 1f).coerceIn(MIN_SCALE, MAX_SCALE)
         }
+        updateSkinLayout()
+    }
 
     private fun serializeLayout(): String = ControlId.values().joinToString(";") { id ->
         val transform = transforms.getValue(id)
-        baseGuide.set(guide.x, guide.y)
-        baseBack.set(back.x, back.y)
-        baseStart.set(start.x, start.y)
-        updateSkinLayout()
         "${id.name},${transform.offsetX},${transform.offsetY},${transform.scale}"
     }
 
