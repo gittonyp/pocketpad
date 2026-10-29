@@ -40,6 +40,28 @@
             android:textSize="12sp" />
 
         <Button
+            android:id="@+id/customizeButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/customize"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/resetButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/reset"
+            android:textSize="12sp" />
+
+        <Button
             android:id="@+id/pairButton"
             android:layout_width="wrap_content"
             android:layout_height="36dp"

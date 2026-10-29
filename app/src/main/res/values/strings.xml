@@ -3,6 +3,9 @@
     <string name="app_name">PocketPad</string>
     <string name="skin_xbox">Xbox</string>
     <string name="skin_playstation">PS</string>
+    <string name="customize">Customize</string>
+    <string name="done">Done</string>
+    <string name="reset">Reset</string>
     <string name="pair">Pair</string>
     <string name="notification_channel">Controller</string>
     <string name="notification_title">PocketPad</string>

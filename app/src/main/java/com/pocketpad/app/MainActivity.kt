@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private lateinit var gamepadView: GamepadView
     private lateinit var statusText: TextView
     private lateinit var skinButton: Button
+    private lateinit var customizeButton: Button
 
     private var skin = Skin.XBOX
 
@@ -53,10 +54,15 @@ class MainActivity : Activity() {
         gamepadView = findViewById(R.id.gamepadView)
         statusText = findViewById(R.id.statusText)
         skinButton = findViewById(R.id.skinButton)
+        customizeButton = findViewById(R.id.customizeButton)
         val pairButton = findViewById<Button>(R.id.pairButton)
 
         gamepadView.skin = skin
+        gamepadView.restoreLayout(getPreferences(MODE_PRIVATE).getString(LAYOUT_PREF, null))
         gamepadView.onStateChanged = { state -> queueSend(state) }
+        gamepadView.onLayoutChanged = { layout ->
+            getPreferences(MODE_PRIVATE).edit().putString(LAYOUT_PREF, layout).apply()
+        }
 
         skinButton.setOnClickListener {
             skin = if (skin == Skin.XBOX) Skin.PLAYSTATION else Skin.XBOX
@@ -64,6 +70,17 @@ class MainActivity : Activity() {
             skinButton.setText(
                 if (skin == Skin.XBOX) R.string.skin_xbox else R.string.skin_playstation
             )
+        }
+
+        customizeButton.setOnClickListener {
+            gamepadView.customizeMode = !gamepadView.customizeMode
+            customizeButton.setText(
+                if (gamepadView.customizeMode) R.string.done else R.string.customize
+            )
+        }
+
+        findViewById<Button>(R.id.resetButton).setOnClickListener {
+            gamepadView.resetLayout()
         }
 
         pairButton.setOnClickListener { pair() }
@@ -203,5 +220,6 @@ class MainActivity : Activity() {
         const val REQUEST_NOTIFICATIONS = 101
         const val DISCOVERABLE_SECONDS = 300
         const val MIN_SEND_INTERVAL_MS = 8L
+        const val LAYOUT_PREF = "custom_gamepad_layout"
     }
 }

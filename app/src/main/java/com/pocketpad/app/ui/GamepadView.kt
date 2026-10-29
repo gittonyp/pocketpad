@@ -43,6 +43,17 @@ class GamepadView @JvmOverloads constructor(
         }
 
     var onStateChanged: ((GamepadState) -> Unit)? = null
+    var onLayoutChanged: ((String) -> Unit)? = null
+
+    var customizeMode: Boolean = false
+        set(value) {
+            field = value
+            pointers.clear()
+            state.reset()
+            selectedControl = null
+            editorPointerId = MotionEvent.INVALID_POINTER_ID
+            invalidate()
+        }
 
     private val state = GamepadState()
     private val pointers = SparseArray<Target>()
@@ -55,6 +66,19 @@ class GamepadView @JvmOverloads constructor(
     private val rightStick = PointF()
     private val dpad = PointF()
     private val face = PointF()
+    private val baseLeftStick = PointF()
+    private val baseRightStick = PointF()
+    private val baseDpad = PointF()
+    private val baseFace = PointF()
+    private val baseGuide = PointF()
+    private val baseBack = PointF()
+    private val baseStart = PointF()
+    private val transforms = ControlId.values().associateWith { Transform() }
+    private var selectedControl: ControlId? = null
+    private var editorPointerId = MotionEvent.INVALID_POINTER_ID
+    private var editorResizing = false
+    private var editorLastX = 0f
+    private var editorLastY = 0f
     private var stickRadius = 0f
     private var dpadHalf = 0f
     private var faceOffset = 0f
@@ -96,9 +120,9 @@ class GamepadView @JvmOverloads constructor(
 
         updateSkinLayout()
 
-        guide.set(widthPx * 0.50f, heightPx * 0.11f)
-        back.set(widthPx * 0.41f, heightPx * 0.13f)
-        start.set(widthPx * 0.59f, heightPx * 0.13f)
+        baseGuide.set(widthPx * 0.50f, heightPx * 0.11f)
+        baseBack.set(widthPx * 0.41f, heightPx * 0.13f)
+        baseStart.set(widthPx * 0.59f, heightPx * 0.13f)
 
         val margin = widthPx * 0.03f
         val triggerW = unit * 0.16f
@@ -151,17 +175,19 @@ class GamepadView @JvmOverloads constructor(
         fillPaint.alpha = 255
 
         drawDpad(canvas)
-        drawStick(canvas, leftStick, state.leftX, state.leftY, "L", isHeld(Kind.LEFT_STICK))
-        drawStick(canvas, rightStick, state.rightX, state.rightY, "R", isHeld(Kind.RIGHT_STICK))
+        drawStick(canvas, leftStick, state.leftX, state.leftY, "L", isHeld(Kind.LEFT_STICK), scale(ControlId.LEFT_STICK))
+        drawStick(canvas, rightStick, state.rightX, state.rightY, "R", isHeld(Kind.RIGHT_STICK), scale(ControlId.RIGHT_STICK))
         drawFaceButtons(canvas)
         drawTrigger(canvas, ltRect, skin.triggerLabels[0], state.leftTrigger)
         drawTrigger(canvas, rtRect, skin.triggerLabels[1], state.rightTrigger)
         drawShoulder(canvas, lbRect, skin.shoulderLabels[0], state.buttons[Buttons.LB])
         drawShoulder(canvas, rbRect, skin.shoulderLabels[1], state.buttons[Buttons.RB])
         drawCenterButtons(canvas)
+        if (customizeMode) drawEditorOverlay(canvas)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (customizeMode) return onCustomizeTouch(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val index = event.actionIndex
@@ -278,16 +304,17 @@ class GamepadView @JvmOverloads constructor(
 
     private fun applyStick(left: Boolean, x: Float, y: Float) {
         val center = if (left) leftStick else rightStick
+        val radius = stickRadius * scale(if (left) ControlId.LEFT_STICK else ControlId.RIGHT_STICK)
         var dx = x - center.x
         var dy = y - center.y
         val distance = hypot(dx, dy)
-        if (distance > stickRadius) {
-            val scale = stickRadius / distance
-            dx *= scale
-            dy *= scale
+        if (distance > radius) {
+            val limit = radius / distance
+            dx *= limit
+            dy *= limit
         }
-        val nx = (dx / stickRadius).coerceIn(-1f, 1f)
-        val ny = (dy / stickRadius).coerceIn(-1f, 1f)
+        val nx = (dx / radius).coerceIn(-1f, 1f)
+        val ny = (dy / radius).coerceIn(-1f, 1f)
         val ax = (GamepadState.CENTER + nx * 127f).roundToInt().coerceIn(0, 255)
         val ay = (GamepadState.CENTER + ny * 127f).roundToInt().coerceIn(0, 255)
         if (left) {
@@ -323,31 +350,34 @@ class GamepadView @JvmOverloads constructor(
     }
 
     private fun hitTest(x: Float, y: Float): Hit? {
+        val faceScale = scale(ControlId.FACE)
         for (i in 0 until 4) {
-            if (hypot(x - faceX(i), y - faceY(i)) <= faceRadius * 1.25f) {
+            if (hypot(x - faceX(i), y - faceY(i)) <= faceRadius * faceScale * 1.25f) {
                 return Hit(Kind.FACE, i)
             }
         }
-        if (hypot(x - back.x, y - back.y) <= smallRadius * 1.3f) return Hit(Kind.CENTER, 0)
-        if (hypot(x - start.x, y - start.y) <= smallRadius * 1.3f) return Hit(Kind.CENTER, 1)
-        if (hypot(x - guide.x, y - guide.y) <= guideRadius * 1.3f) return Hit(Kind.CENTER, 2)
+        val centerScale = scale(ControlId.CENTER)
+        if (hypot(x - back.x, y - back.y) <= smallRadius * centerScale * 1.3f) return Hit(Kind.CENTER, 0)
+        if (hypot(x - start.x, y - start.y) <= smallRadius * centerScale * 1.3f) return Hit(Kind.CENTER, 1)
+        if (hypot(x - guide.x, y - guide.y) <= guideRadius * centerScale * 1.3f) return Hit(Kind.CENTER, 2)
 
         if (ltRect.contains(x, y)) return Hit(Kind.TRIGGER, 0)
         if (rtRect.contains(x, y)) return Hit(Kind.TRIGGER, 1)
         if (lbRect.contains(x, y)) return Hit(Kind.SHOULDER, 0)
         if (rbRect.contains(x, y)) return Hit(Kind.SHOULDER, 1)
 
-        if (hypot(x - leftStick.x, y - leftStick.y) <= stickRadius) {
+        if (hypot(x - leftStick.x, y - leftStick.y) <= stickRadius * scale(ControlId.LEFT_STICK)) {
             return Hit(Kind.LEFT_STICK, 0)
         }
-        if (hypot(x - rightStick.x, y - rightStick.y) <= stickRadius) {
+        if (hypot(x - rightStick.x, y - rightStick.y) <= stickRadius * scale(ControlId.RIGHT_STICK)) {
             return Hit(Kind.RIGHT_STICK, 0)
         }
         val dpadX = abs(x - dpad.x)
         val dpadY = abs(y - dpad.y)
-        val arm = unit * 0.055f
-        if ((dpadX <= dpadHalf && dpadY <= arm) ||
-            (dpadY <= dpadHalf && dpadX <= arm)
+        val dpadScale = scale(ControlId.DPAD)
+        val arm = unit * 0.055f * dpadScale
+        if ((dpadX <= dpadHalf * dpadScale && dpadY <= arm) ||
+            (dpadY <= dpadHalf * dpadScale && dpadX <= arm)
         ) {
             return Hit(Kind.DPAD, 0)
         }
@@ -360,32 +390,34 @@ class GamepadView @JvmOverloads constructor(
         ax: Int,
         ay: Int,
         label: String,
-        active: Boolean
+        active: Boolean,
+        scale: Float
     ) {
+        val radius = stickRadius * scale
         fillPaint.color = 0x33121C26
-        canvas.drawCircle(center.x, center.y, stickRadius, fillPaint)
+        canvas.drawCircle(center.x, center.y, radius, fillPaint)
 
         strokePaint.color = if (active) skin.accent else 0x66FFFFFF
         strokePaint.strokeWidth = unit * 0.006f
-        canvas.drawCircle(center.x, center.y, stickRadius, strokePaint)
-        canvas.drawCircle(center.x, center.y, stickRadius * 0.36f, strokePaint)
+        canvas.drawCircle(center.x, center.y, radius, strokePaint)
+        canvas.drawCircle(center.x, center.y, radius * 0.36f, strokePaint)
 
         val nx = (ax - GamepadState.CENTER) / 127f
         val ny = (ay - GamepadState.CENTER) / 127f
-        val kx = center.x + nx * stickRadius * 0.55f
-        val ky = center.y + ny * stickRadius * 0.55f
+        val kx = center.x + nx * radius * 0.55f
+        val ky = center.y + ny * radius * 0.55f
 
         fillPaint.color = if (active) skin.accent else 0xFF1B2530.toInt()
-        canvas.drawCircle(kx, ky, stickRadius * 0.42f, fillPaint)
+        canvas.drawCircle(kx, ky, radius * 0.42f, fillPaint)
         strokePaint.color = 0xCCFFFFFF.toInt()
-        canvas.drawCircle(kx, ky, stickRadius * 0.42f, strokePaint)
+        canvas.drawCircle(kx, ky, radius * 0.42f, strokePaint)
 
         textPaint.color = 0x99FFFFFF.toInt()
         textPaint.textSize = unit * 0.03f
         canvas.drawText(
             label,
             center.x,
-            center.y - stickRadius - unit * 0.015f,
+            center.y - radius - unit * 0.015f,
             textPaint
         )
     }
@@ -393,8 +425,9 @@ class GamepadView @JvmOverloads constructor(
     private fun drawDpad(canvas: Canvas) {
         val cx = dpad.x
         val cy = dpad.y
-        val half = dpadHalf
-        val arm = unit * 0.055f
+        val scale = scale(ControlId.DPAD)
+        val half = dpadHalf * scale
+        val arm = unit * 0.055f * scale
         val radius = arm * 0.7f
 
         fillPaint.color = 0x331C2836
@@ -419,6 +452,7 @@ class GamepadView @JvmOverloads constructor(
     }
 
     private fun drawFaceButtons(canvas: Canvas) {
+        val scale = scale(ControlId.FACE)
         for (i in 0 until 4) {
             val cx = faceX(i)
             val cy = faceY(i)
@@ -427,14 +461,14 @@ class GamepadView @JvmOverloads constructor(
             if (skin == Skin.XBOX) {
                 fillPaint.color = skin.faceColors[i]
                 fillPaint.alpha = if (pressed) 255 else 215
-                canvas.drawCircle(cx, cy, faceRadius, fillPaint)
+                canvas.drawCircle(cx, cy, faceRadius * scale, fillPaint)
 
                 strokePaint.color = if (pressed) Color.WHITE else 0x88FFFFFF.toInt()
                 strokePaint.strokeWidth = unit * (if (pressed) 0.009f else 0.004f)
-                canvas.drawCircle(cx, cy, faceRadius, strokePaint)
+                canvas.drawCircle(cx, cy, faceRadius * scale, strokePaint)
 
                 textPaint.color = Color.WHITE
-                textPaint.textSize = faceRadius * 1.15f
+                textPaint.textSize = faceRadius * scale * 1.15f
                 canvas.drawText(
                     skin.faceLabels[i],
                     cx,
@@ -442,15 +476,16 @@ class GamepadView @JvmOverloads constructor(
                     textPaint
                 )
             } else {
-                drawPlayStationButton(canvas, cx, cy, i, pressed)
+                drawPlayStationButton(canvas, cx, cy, i, pressed, scale)
             }
         }
     }
 
-    private fun drawPlayStationButton(canvas: Canvas, cx: Float, cy: Float, index: Int, pressed: Boolean) {
+    private fun drawPlayStationButton(canvas: Canvas, cx: Float, cy: Float, index: Int, pressed: Boolean, scale: Float) {
+        val radius = faceRadius * scale
         fillPaint.color = skin.faceColors[index]
         fillPaint.alpha = if (pressed) 70 else 28
-        canvas.drawCircle(cx, cy, faceRadius * 1.12f, fillPaint)
+        canvas.drawCircle(cx, cy, radius * 1.12f, fillPaint)
         fillPaint.alpha = 255
 
         strokePaint.color = skin.faceColors[index]
@@ -459,16 +494,16 @@ class GamepadView @JvmOverloads constructor(
         val shape = skin.faceShapes[index]
         when (shape) {
             FaceShape.CROSS -> {
-                canvas.drawLine(cx - faceRadius * 0.45f, cy - faceRadius * 0.45f, cx + faceRadius * 0.45f, cy + faceRadius * 0.45f, strokePaint)
-                canvas.drawLine(cx + faceRadius * 0.45f, cy - faceRadius * 0.45f, cx - faceRadius * 0.45f, cy + faceRadius * 0.45f, strokePaint)
+                canvas.drawLine(cx - radius * 0.45f, cy - radius * 0.45f, cx + radius * 0.45f, cy + radius * 0.45f, strokePaint)
+                canvas.drawLine(cx + radius * 0.45f, cy - radius * 0.45f, cx - radius * 0.45f, cy + radius * 0.45f, strokePaint)
             }
-            FaceShape.CIRCLE -> canvas.drawCircle(cx, cy, faceRadius * 0.45f, strokePaint)
-            FaceShape.SQUARE -> canvas.drawRect(cx - faceRadius * 0.42f, cy - faceRadius * 0.42f, cx + faceRadius * 0.42f, cy + faceRadius * 0.42f, strokePaint)
+            FaceShape.CIRCLE -> canvas.drawCircle(cx, cy, radius * 0.45f, strokePaint)
+            FaceShape.SQUARE -> canvas.drawRect(cx - radius * 0.42f, cy - radius * 0.42f, cx + radius * 0.42f, cy + radius * 0.42f, strokePaint)
             FaceShape.TRIANGLE -> {
                 val path = Path().apply {
-                    moveTo(cx, cy - faceRadius * 0.52f)
-                    lineTo(cx + faceRadius * 0.52f, cy + faceRadius * 0.42f)
-                    lineTo(cx - faceRadius * 0.52f, cy + faceRadius * 0.42f)
+                    moveTo(cx, cy - radius * 0.52f)
+                    lineTo(cx + radius * 0.52f, cy + radius * 0.42f)
+                    lineTo(cx - radius * 0.52f, cy + radius * 0.42f)
                     close()
                 }
                 canvas.drawPath(path, strokePaint)
@@ -523,9 +558,10 @@ class GamepadView @JvmOverloads constructor(
     }
 
     private fun drawCenterButtons(canvas: Canvas) {
-        drawCenterButton(canvas, back, smallRadius, skin.centerLabels[0], state.buttons[Buttons.BACK])
-        drawCenterButton(canvas, start, smallRadius, skin.centerLabels[1], state.buttons[Buttons.START])
-        drawCenterButton(canvas, guide, guideRadius, skin.centerLabels[2], state.buttons[Buttons.GUIDE])
+        val scale = scale(ControlId.CENTER)
+        drawCenterButton(canvas, back, smallRadius * scale, skin.centerLabels[0], state.buttons[Buttons.BACK])
+        drawCenterButton(canvas, start, smallRadius * scale, skin.centerLabels[1], state.buttons[Buttons.START])
+        drawCenterButton(canvas, guide, guideRadius * scale, skin.centerLabels[2], state.buttons[Buttons.GUIDE])
     }
 
     private fun drawCenterButton(
@@ -558,14 +594,14 @@ class GamepadView @JvmOverloads constructor(
     }
 
     private fun faceX(index: Int): Float = face.x + when (index) {
-        1 -> faceOffset
-        2 -> -faceOffset
+        1 -> faceOffset * scale(ControlId.FACE)
+        2 -> -faceOffset * scale(ControlId.FACE)
         else -> 0f
     }
 
     private fun faceY(index: Int): Float = face.y + when (index) {
-        0 -> faceOffset
-        3 -> -faceOffset
+        0 -> faceOffset * scale(ControlId.FACE)
+        3 -> -faceOffset * scale(ControlId.FACE)
         else -> 0f
     }
 
@@ -573,10 +609,57 @@ class GamepadView @JvmOverloads constructor(
         if (widthPx <= 0f || heightPx <= 0f) return
         val upper = heightPx * if (skin == Skin.PLAYSTATION) 0.43f else 0.55f
         val lower = heightPx * if (skin == Skin.PLAYSTATION) 0.72f else 0.86f
-        leftStick.set(widthPx * 0.16f, lower)
-        dpad.set(widthPx * 0.16f, upper)
-        face.set(widthPx * 0.84f, upper)
-        rightStick.set(widthPx * 0.84f, lower)
+        baseLeftStick.set(widthPx * 0.16f, lower)
+        baseDpad.set(widthPx * 0.16f, upper)
+        baseFace.set(widthPx * 0.84f, upper)
+        baseRightStick.set(widthPx * 0.84f, lower)
+        applyPosition(ControlId.LEFT_STICK, baseLeftStick, leftStick)
+        applyPosition(ControlId.RIGHT_STICK, baseRightStick, rightStick)
+        applyPosition(ControlId.DPAD, baseDpad, dpad)
+        applyPosition(ControlId.FACE, baseFace, face)
+        applyPosition(ControlId.CENTER, baseGuide, guide)
+        val center = transforms.getValue(ControlId.CENTER)
+        back.set(baseBack.x + center.offsetX, baseBack.y + center.offsetY)
+        start.set(baseStart.x + center.offsetX, baseStart.y + center.offsetY)
+    }
+
+    private fun applyPosition(id: ControlId, base: PointF, result: PointF) {
+        val transform = transforms.getValue(id)
+        result.set(base.x + transform.offsetX, base.y + transform.offsetY)
+    }
+
+    private fun scale(id: ControlId): Float = transforms.getValue(id).scale
+
+    fun resetLayout() {
+        transforms.values.forEach {
+            it.offsetX = 0f
+            it.offsetY = 0f
+            it.scale = 1f
+        }
+        updateSkinLayout()
+        onLayoutChanged?.invoke(serializeLayout())
+        invalidate()
+    }
+
+    fun restoreLayout(serialized: String?) {
+        if (serialized.isNullOrBlank()) return
+        serialized.split(';').forEach { entry ->
+            val parts = entry.split(',')
+            if (parts.size != 4) return@forEach
+            val id = ControlId.values().firstOrNull { it.name == parts[0] } ?: return@forEach
+            val transform = transforms.getValue(id)
+            transform.offsetX = parts[1].toFloatOrNull() ?: return@forEach
+            transform.offsetY = parts[2].toFloatOrNull() ?: return@forEach
+            transform.scale = (parts[3].toFloatOrNull() ?: 1f).coerceIn(MIN_SCALE, MAX_SCALE)
+        }
+
+    private fun serializeLayout(): String = ControlId.values().joinToString(";") { id ->
+        val transform = transforms.getValue(id)
+        baseGuide.set(guide.x, guide.y)
+        baseBack.set(back.x, back.y)
+        baseStart.set(start.x, start.y)
+        updateSkinLayout()
+        "${id.name},${transform.offsetX},${transform.offsetY},${transform.scale}"
     }
 
     private fun shoulderButton(index: Int): Int =
@@ -600,6 +683,90 @@ class GamepadView @JvmOverloads constructor(
         return false
     }
 
+    private fun onCustomizeTouch(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val control = editorHitTest(event.x, event.y)
+                selectedControl = control
+                editorPointerId = event.getPointerId(0)
+                editorResizing = control != null && isResizeHandle(control, event.x, event.y)
+                editorLastX = event.x
+                editorLastY = event.y
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount == 0 || event.getPointerId(0) != editorPointerId) return true
+                val control = selectedControl ?: return true
+                val transform = transforms.getValue(control)
+                val dx = event.x - editorLastX
+                val dy = event.y - editorLastY
+                if (editorResizing) {
+                    transform.scale = (transform.scale + (dx + dy) / unit).coerceIn(MIN_SCALE, MAX_SCALE)
+                } else {
+                    transform.offsetX += dx
+                    transform.offsetY += dy
+                }
+                editorLastX = event.x
+                editorLastY = event.y
+                updateSkinLayout()
+                invalidate()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (selectedControl != null) onLayoutChanged?.invoke(serializeLayout())
+                editorPointerId = MotionEvent.INVALID_POINTER_ID
+                editorResizing = false
+            }
+        }
+        return true
+    }
+
+    private fun editorHitTest(x: Float, y: Float): ControlId? = ControlId.values()
+        .asSequence()
+        .map { it to editorBounds(it) }
+        .filter { (_, bounds) -> bounds.contains(x, y) }
+        .minByOrNull { (_, bounds) -> bounds.width() * bounds.height() }
+        ?.first
+
+    private fun isResizeHandle(id: ControlId, x: Float, y: Float): Boolean {
+        val bounds = editorBounds(id)
+        return hypot(x - bounds.right, y - bounds.bottom) <= unit * 0.045f
+    }
+
+    private fun editorBounds(id: ControlId): RectF {
+        val bounds = RectF()
+        when (id) {
+            ControlId.LEFT_STICK -> bounds.set(leftStick.x - stickRadius * scale(id), leftStick.y - stickRadius * scale(id), leftStick.x + stickRadius * scale(id), leftStick.y + stickRadius * scale(id))
+            ControlId.RIGHT_STICK -> bounds.set(rightStick.x - stickRadius * scale(id), rightStick.y - stickRadius * scale(id), rightStick.x + stickRadius * scale(id), rightStick.y + stickRadius * scale(id))
+            ControlId.DPAD -> bounds.set(dpad.x - dpadHalf * scale(id), dpad.y - dpadHalf * scale(id), dpad.x + dpadHalf * scale(id), dpad.y + dpadHalf * scale(id))
+            ControlId.FACE -> {
+                val extent = (faceOffset + faceRadius) * scale(id)
+                bounds.set(face.x - extent, face.y - extent, face.x + extent, face.y + extent)
+            }
+            ControlId.CENTER -> {
+                val extent = unit * 0.11f * scale(id)
+                bounds.set(guide.x - extent, guide.y - extent, guide.x + extent, guide.y + extent)
+            }
+        }
+        bounds.inset(-unit * 0.025f, -unit * 0.025f)
+        return bounds
+    }
+
+    private fun drawEditorOverlay(canvas: Canvas) {
+        textPaint.color = Color.WHITE
+        textPaint.textSize = unit * 0.032f
+        textPaint.textAlign = Paint.Align.LEFT
+        canvas.drawText("CUSTOMIZE  -  drag to move, use the corner handle to resize", unit * 0.04f, heightPx - unit * 0.035f, textPaint)
+        textPaint.textAlign = Paint.Align.CENTER
+        for (id in ControlId.values()) {
+            val bounds = editorBounds(id)
+            strokePaint.color = if (id == selectedControl) skin.accent else 0x66FFFFFF
+            strokePaint.strokeWidth = unit * 0.004f
+            canvas.drawRoundRect(bounds, unit * 0.02f, unit * 0.02f, strokePaint)
+            fillPaint.color = strokePaint.color
+            canvas.drawCircle(bounds.right, bounds.bottom, unit * 0.025f, fillPaint)
+        }
+    }
+
     private fun notifyChanged() {
         onStateChanged?.invoke(state)
         invalidate()
@@ -607,6 +774,10 @@ class GamepadView @JvmOverloads constructor(
 
     private enum class Kind {
         LEFT_STICK, RIGHT_STICK, DPAD, FACE, SHOULDER, TRIGGER, CENTER
+    }
+
+    private enum class ControlId {
+        LEFT_STICK, RIGHT_STICK, DPAD, FACE, CENTER
     }
 
     private data class Hit(val kind: Kind, val index: Int)
@@ -621,8 +792,16 @@ class GamepadView @JvmOverloads constructor(
         var moved = false
     }
 
+    private class Transform(
+        var offsetX: Float = 0f,
+        var offsetY: Float = 0f,
+        var scale: Float = 1f
+    )
+
     private companion object {
         const val TAP_MS = 220L
         const val TAP_HOLD_MS = 90L
+        const val MIN_SCALE = 0.65f
+        const val MAX_SCALE = 1.65f
     }
 }
