@@ -331,7 +331,12 @@ class GamepadView @JvmOverloads constructor(
         if (hypot(x - rightStick.x, y - rightStick.y) <= stickRadius) {
             return Hit(Kind.RIGHT_STICK, 0)
         }
-        if (abs(x - dpad.x) <= dpadHalf && abs(y - dpad.y) <= dpadHalf) {
+        val dpadX = abs(x - dpad.x)
+        val dpadY = abs(y - dpad.y)
+        val arm = unit * 0.055f
+        if ((dpadX <= dpadHalf && dpadY <= arm) ||
+            (dpadY <= dpadHalf && dpadX <= arm)
+        ) {
             return Hit(Kind.DPAD, 0)
         }
         return null
