@@ -21,7 +21,8 @@ companion app.
 2. Sideload it onto the phone and open **PocketPad**.
 3. Grant the Bluetooth permissions when asked.
 4. On the PC: **Settings → Bluetooth & devices → Add device → Bluetooth**, then pick
-   **PocketPad**. (Tap **Pair** first so the phone is discoverable.)
+   your phone's Bluetooth name. (Tap **Pair** first so the phone is discoverable.)
+   The gamepad itself is described to Windows as **PocketPad**.
 5. The status bar should read **Connected**. Play.
 
 Keep the app in the foreground; the ongoing notification keeps the controller
@@ -75,8 +76,8 @@ git push origin v1.0.0
 
 ## Troubleshooting
 
-- **No "PocketPad" in the PC's Bluetooth list** — tap **Pair** in the app first; keep
-  the app open. Remove any old pairing on both sides and retry.
+- **Your phone doesn't appear in the PC's Bluetooth list** — tap **Pair** in the app
+  first; keep the app open. Remove any old pairing on both sides and retry.
 - **Connected but games ignore it** — use Steam Input, or check the pad in Windows
   `joy.cpl` / `Game Controllers`.
 - **Drops when switching apps** — PocketPad uses a foreground service; make sure the

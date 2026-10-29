@@ -49,7 +49,7 @@ class HidGamepad(
             if (pluggedDevice != null) {
                 listener.onStatus("Connected to ${safeName(pluggedDevice)}")
             } else {
-                listener.onStatus("Ready — tap Pair, then add “PocketPad” on your PC")
+                listener.onStatus("Ready — tap Pair, then pair with this phone on your PC")
             }
         }
 
