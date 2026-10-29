@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">PocketPad PlayStation skin preview</title>
+  <desc id="desc">Landscape virtual controller with a blue PlayStation theme, upper D-pad and face buttons, lower analog sticks, shoulder controls, and center buttons.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17283b"/>
+      <stop offset="1" stop-color="#070a12"/>
+    </linearGradient>
+    <linearGradient id="surface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#284b70" stop-opacity=".72"/>
+      <stop offset="1" stop-color="#102238" stop-opacity=".72"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".38"/>
+    </filter>
+    <style>
+      .label { font: 700 16px sans-serif; letter-spacing: 1px; fill: #dcecff; text-anchor: middle; }
+      .small { font: 700 13px sans-serif; letter-spacing: 1px; fill: #b7c8dc; text-anchor: middle; }
+      .outline { fill: none; stroke: #b9d8f6; stroke-opacity: .55; stroke-width: 4; }
+    </style>
+  </defs>
+  <rect width="1280" height="720" fill="#05070a"/>
+  <rect x="20" y="20" width="1240" height="680" rx="34" fill="url(#bg)" stroke="#3b78ad" stroke-opacity=".55" stroke-width="3"/>
+  <rect x="48" y="48" width="1184" height="624" rx="28" fill="url(#surface)" stroke="#6da5d8" stroke-opacity=".18" stroke-width="2"/>
+
+  <g filter="url(#shadow)">
+    <rect x="82" y="72" width="1116" height="52" rx="12" fill="#08111c" fill-opacity=".9"/>
+    <text x="110" y="105" class="small" text-anchor="start">POCKETPAD  /  CONNECTED</text>
+    <rect x="930" y="82" width="108" height="32" rx="8" fill="#183552" stroke="#579bd5"/>
+    <text x="984" y="103" class="small">PS SKIN</text>
+    <rect x="1050" y="82" width="116" height="32" rx="8" fill="#0871bd"/>
+    <text x="1108" y="103" class="small" fill="#fff">PAIR</text>
+  </g>
+
+  <g opacity=".8">
+    <rect x="110" y="184" width="140" height="28" rx="10" fill="#152a40" stroke="#8abbe6" stroke-opacity=".42"/>
+    <text x="180" y="204" class="label">L2</text>
+    <rect x="262" y="184" width="100" height="28" rx="10" fill="#152a40" stroke="#8abbe6" stroke-opacity=".42"/>
+    <text x="312" y="204" class="label">L1</text>
+    <rect x="918" y="184" width="100" height="28" rx="10" fill="#152a40" stroke="#8abbe6" stroke-opacity=".42"/>
+    <text x="968" y="204" class="label">R1</text>
+    <rect x="1030" y="184" width="140" height="28" rx="10" fill="#152a40" stroke="#8abbe6" stroke-opacity=".42"/>
+    <text x="1100" y="204" class="label">R2</text>
+  </g>
+
+  <g transform="translate(230 320)">
+    <rect x="-25" y="-92" width="50" height="184" rx="13" fill="#122238" stroke="#84bce7" stroke-opacity=".55" stroke-width="4"/>
+    <rect x="-92" y="-25" width="184" height="50" rx="13" fill="#122238" stroke="#84bce7" stroke-opacity=".55" stroke-width="4"/>
+    <circle cx="0" cy="0" r="34" fill="#2386ca" fill-opacity=".45"/>
+    <text x="0" y="-116" class="small">D-PAD</text>
+  </g>
+
+  <g transform="translate(1050 320)">
+    <circle cx="0" cy="-66" r="34" fill="#183f6d" stroke="#37c26b" stroke-width="5"/>
+    <path d="M0 -84 L22 -47 L-22 -47 Z" fill="none" stroke="#37c26b" stroke-width="5"/>
+    <circle cx="66" cy="0" r="34" fill="#57303c" stroke="#e0454b" stroke-width="5"/>
+    <circle cx="66" cy="0" r="15" fill="none" stroke="#e0454b" stroke-width="5"/>
+    <circle cx="0" cy="66" r="34" fill="#173e68" stroke="#3a8dde" stroke-width="5"/>
+    <path d="M-14 52 L14 80 M14 52 L-14 80" stroke="#3a8dde" stroke-width="5"/>
+    <circle cx="-66" cy="0" r="34" fill="#51314f" stroke="#e86aa6" stroke-width="5"/>
+    <rect x="-82" y="-16" width="32" height="32" fill="none" stroke="#e86aa6" stroke-width="5"/>
+    <text x="0" y="-116" class="small">FACE</text>
+  </g>
+
+  <g transform="translate(360 548)">
+    <circle r="76" fill="#0c1826" stroke="#8abbe6" stroke-opacity=".5" stroke-width="5"/>
+    <circle r="42" fill="#1f405e" stroke="#b9d8f6" stroke-opacity=".6" stroke-width="4"/>
+    <text y="-98" class="label">L3</text>
+  </g>
+  <g transform="translate(920 548)">
+    <circle r="76" fill="#0c1826" stroke="#8abbe6" stroke-opacity=".5" stroke-width="5"/>
+    <circle r="42" fill="#1f405e" stroke="#b9d8f6" stroke-opacity=".6" stroke-width="4"/>
+    <text y="-98" class="label">R3</text>
+  </g>
+
+  <g transform="translate(640 270)">
+    <circle cx="-55" cy="0" r="24" fill="#142a40" stroke="#78aeda" stroke-width="3"/>
+    <circle cx="55" cy="0" r="24" fill="#142a40" stroke="#78aeda" stroke-width="3"/>
+    <circle cx="0" cy="0" r="34" fill="#1b4267" stroke="#5ba6e3" stroke-width="4"/>
+    <text x="-55" y="5" class="small">SHARE</text>
+    <text x="55" y="5" class="small">OPTIONS</text>
+    <text y="6" class="label" fill="#8ac9ff">PS</text>
+  </g>
+
+  <text x="640" y="650" class="small">PRESS AND HOLD CONTROLS TO SEND INPUT</text>
+</svg>
